@@ -6,6 +6,9 @@ using System.Windows.Forms;
 
 namespace TF_Program2017
 {
+    //声明一个委托
+    public delegate void DelTest();
+   
     /// <summary>
     /// 1-------主驼峰信号机
     /// 2，3----调车信号机
@@ -13,6 +16,7 @@ namespace TF_Program2017
     /// </summary>
     public class Semaphore:BaseShape
     {
+        DelTest mytest;
         private bool m_Direction;//信号机方向
         private bool m_height;//信号机高柱矮柱 
         private string m_FirTrackCircuit;//信号机始处的接近区段
@@ -29,8 +33,8 @@ namespace TF_Program2017
             this.m_height = height;
             this.m_FirTrackCircuit = firtrackcircuit;
             this.enableclick= enableclick0;
-            if (M_SubType == 1) M_RightShuXing = new string[] { "常速", "减速", "加速", "灭灯", "重开信号", "取消进路", "人工解锁", "故障复原" };
-            else if (M_SubType != 4) M_RightShuXing = new string[] { "灭灯", "故障复原","模拟行车" };
+            if (M_SubType == 1) M_RightShuXing = new string[] { "常速", "减速", "加速", "灭灯", "故障复原" };
+            else if (M_SubType != 4) M_RightShuXing = new string[] { "灭灯", "故障复原","模拟行车","取消进路","人工解锁" };
         }
         public override void Draw(Graphics g)
         {

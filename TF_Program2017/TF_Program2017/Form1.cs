@@ -6,13 +6,15 @@ using System.Windows.Forms;
 
 namespace TF_Program2017
 {
-    //让车的一个参数来记录自己走的进路的性质,其实Roadlist[1]自带进路性质,也可以直接使用
+    //2017-4-5让车的一个参数来记录自己走的进路的性质,其实Roadlist[1]自带进路性质,也可以直接使用
+    //2017-4-6进路表需要最后面以“前接近区段”+“信号机”
     public partial class Form1 : Form
     {
         public static List<BaseShape> EquipmentList = new List<BaseShape>();//设备数据
         public static Dictionary<string, BaseShape> EquipmentDic = new Dictionary<string, BaseShape>();//设备数据
         public static List<string> ALLAccessRoad = new List<string>();//存储所有联锁表进路信息
         public static List<BaseShape> RoadList = new List<BaseShape>();//当前进路的所有设备
+        public string roadstr;//当前进路的进路数据表
         public static List<Train> TrainList = new List<Train>();//所有正在运行的车
         public static Dictionary<Train, List<BaseShape>> CarRoadDic = new Dictionary<Train, List<BaseShape>>();//车与相对应的进路
         Point P_you;
@@ -153,16 +155,19 @@ namespace TF_Program2017
                 { th[i].Abort(); i++; }
                 i = 0;
                 while (!Semaphore.Equals(SEtemp[i], null))//信号复原
-                { SEtemp[i].M_ColorFlag = 0; SEtemp[i].enableclick = true; i++; }
+                { SEtemp[i].M_ColorFlag = 0;/* SEtemp[i].enableclick = true;*/ i++; }
                 if (fs.M_SubType == 4) { fs.M_ColorFlag = 1; }
                 Invalidate();
                 clickcount = 1;
                 //将对应的进路上的所有设备写入进路表
+               // RoadList.Clear();
                 foreach (string item in ALLAccessRoad)
                 {
                     string[] strtArray = item.Split(',');
                     if (strtArray[0].Equals(SEtemp[0].M_Name) && strtArray[1].Equals(fs.M_Name))
                     {
+                        MessageBox.Show(item);
+                        roadstr = item;
                         for (int na = 2; na < strtArray.Length; na += 2)
                         {
                             //.csv文件中有其他的空格
@@ -172,29 +177,28 @@ namespace TF_Program2017
                                 {
                                     RoadList.Add(EquipmentDic[strtArray[na]]);
                                 }
-                                if (na == 2)
-                                { RoadList.Add(EquipmentDic[SEtemp[0].M_Name]); }
-                                //加入始端信号机
                             }
                         }
+                        RoadList.Insert(1, SEtemp[0]);//加入始端信号机进入进路
                     }
                 }
-                string error="";
-                if (CheckRoad(RoadList,ref error))//连锁条件满足
+                string error = "";//错误信息提示
+                if (CheckRoad(RoadList, ref error))//连锁条件满足
                 {
                     DZ(RoadList);
                     LinkRosd(RoadList);
-                    OpenX(RoadList);
-                    Train t0 = new Train(RoadList[1].M_SubType);//初始化的时候带上进路的性质
-                    TrainList.Add(t0);
-                    CarRoadDic.Add(t0, RoadList);
-                    t0.CountSpeed();
-                    Thread s = new Thread(RunCar);
-                    s.Start(t0);
+                    //OpenX(RoadList);
+                    //Train t0 = new Train(RoadList[1].M_SubType);//初始化的时候带上进路的性质
+                    //TrainList.Add(t0);
+                    //CarRoadDic.Add(t0, RoadList);
+                    //t0.CountSpeed();
+                    //Thread s = new Thread(RunCar);
+                    //s.Start(t0);
                 }
                 else
                 {
-                    MessageBox.Show("设备"+error+"故障，请检查！");
+                    MessageBox.Show("设备" + error + "故障，请检查！");
+
                     RoadList.Clear();//清除列表数据
                 }
             }
@@ -205,7 +209,7 @@ namespace TF_Program2017
         /// <param name="road"></param>
         /// <param name="error"></param>
         /// <returns></returns>
-        bool CheckRoad(List<BaseShape> road,ref string error)
+        bool CheckRoad(List<BaseShape> road, ref string error)
         {
             foreach (BaseShape item in road)
             {
@@ -223,18 +227,17 @@ namespace TF_Program2017
         /// <param name="road"></param>
         void DZ(List<BaseShape> road)
         {
-            foreach (string item in ALLAccessRoad)
+            string[] strtArray = roadstr.Split(',');//找到正确的那条线
+            for (int na = 2; na < strtArray.Length; na += 2)
             {
-                string[] strtArray = item.Split(',');//找到正确的那条线
-                for (int na = 2; na < strtArray.Length; na += 2)
+                foreach (BaseShape items in road)
                 {
-                    foreach (BaseShape items in road)
+                    if (items.M_Name.Equals(strtArray[na]) && items.M_Type == 2)//将道岔转换
                     {
-                        if (items.M_Name.Equals(strtArray[na])&& items.M_Type == 2)//将道岔转换
-                        {
-                            Turnout tn = (Turnout)items;
-                            tn.State = bool.Parse(strtArray[na + 1]);
-                        }
+                        Turnout tn = (Turnout)items;
+                        tn.State = bool.Parse(strtArray[na + 1]);
+                        Invalidate();//道岔转换重绘
+                        Delays.Delay(800);
                     }
                 }
             }
@@ -247,7 +250,7 @@ namespace TF_Program2017
         {
             foreach (BaseShape item in road)
             {
-                if (item.M_Type == 3|| item.M_Type == 2)//锁闭轨道电路和道岔
+                if (item.M_Type == 3 || item.M_Type == 2)//锁闭轨道电路和道岔
                 {
                     item.M_ColorFlag = 1;
                 }
@@ -273,15 +276,48 @@ namespace TF_Program2017
         }
         /// <summary>
         /// 按照实际列车行走距离来进行解锁时机判断
+        /// 调车进路不按（仅溜放进路按照此标准）
         /// </summary>
         void RunCar(object t0)
         {
             Train t = (Train)t0;
+            int count = 0;
+            List<BaseShape> tempQ = new List<BaseShape>();
             foreach (BaseShape item in RoadList)
             {
-               // if()
+                if (item.M_Type == 2 || item.M_Type == 3)//道岔区段和轨道区段依次占用
+                {
+                    tempQ.Add(item);//添加进入临时的区段list
+                    item.M_ColorFlag = 2;
+                    Invalidate();//进路占用重绘
+                    Delays.Delay(1000);
+                    if (count > 0)
+                    {
+                        tempQ[count - 1].M_ColorFlag = 1;
+                        RoadList[1].M_ColorFlag = 0;//调车进路，机车全部进入，信号灯灭灯
+                        Invalidate();
+                    }
+                    count++;
+                }
             }
-
+            //调车进路完毕，一次解锁
+            Delays.Delay(1000);
+            FreeRoad(RoadList);
+        }
+        /// <summary>
+        /// 进路一次解锁
+        /// </summary>
+        /// <param name="road"></param>
+        void FreeRoad(List<BaseShape> road)
+        {
+            foreach (BaseShape item in road)
+            {
+                if (item.M_Type == 1) { Semaphore se = (Semaphore)item; se.enableclick = true; }
+                else if (item.M_Type == 2 || item.M_Type == 3) { item.M_ColorFlag = 0; }
+            }
+            road[road.Count - 2].M_ColorFlag = 2 ;
+            Invalidate();
+            RoadList.Clear();
         }
         /// <summary>
         /// 鼠标变手型
@@ -342,6 +378,24 @@ namespace TF_Program2017
         private void contextMenuStrip1_ItemClicked(object sender, ToolStripItemClickedEventArgs e)
         {
             contextMenuStrip1.Visible = false;
+            foreach (BaseShape item in EquipmentList)
+            {
+                //进行调车进路的模拟行车
+                if (item.IsEnter(p) && e.ClickedItem.Text == "模拟行车")
+                {
+                    OpenX(RoadList);
+                    Train t0 = new Train(RoadList[1].M_SubType);//初始化的时候带上进路的性质
+                    TrainList.Add(t0);
+                    CarRoadDic.Add(t0, RoadList);
+                    t0.CountSpeed();
+                    Thread s = new Thread(RunCar);
+                    s.Start(t0);
+                }
+                else if (item.IsEnter(p) && e.ClickedItem.Text == "取消进路")
+                {
+                    FreeRoad(RoadList);
+                }
+            }
             AloneOperste.AloneOp(EquipmentList, P_you, e.ClickedItem.Text);
             Invalidate();
         }
